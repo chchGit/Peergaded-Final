@@ -1,0 +1,294 @@
+---
+title: "COVID19"
+author: "chch"
+date: '2022-02-26'
+output:
+  html_document: default
+  pdf_document: default
+---
+***Data science as a field***
+
+***Peer graded final assignment : Analysis of COVID 19 data from Johns Hopkins
+University***
+
+***Goal: ***
+Goal of this project is to analyze and visualize COVID 19 data from Johns Hopkins University dataset.
+
+***###Import Data***
+
+```markdown
+link_in <- 'https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv'
+NYPD_Shooting_Incident_Data_Historic <- read_csv(link_in)
+file_names <-c("time_series_covid19_confirmed_global.csv",
+              "time_series_covid19_deaths_global.csv",
+              "time_series_covid19_confirmed_US.csv",
+              "time_series_covid19_deaths_US.csv")
+urls <- str_c(url_in,file_names)
+global_cases <-read_csv(urls[1])
+global_deaths <-read_csv(urls[2])
+US_cases <- read_csv(urls[3])
+US_deaths <- read_csv(urls[4])
+```
+***Data Summary***
+```markdown
+summary(global_cases)
+summary(global_deaths)
+summary(US_cases)
+summary(US_deaths)
+```
+Global_case
+
+```r
+ Province/State     Country/Region         date               cases         
+ Length:218396      Length:218396      Length:218396      Min.   :       0  
+ Class :character   Class :character   Class :character   1st Qu.:     205  
+ Mode  :character   Mode  :character   Mode  :character   Median :    4564  
+                                                          Mean   :  442380  
+                                                          3rd Qu.:   90847  
+                                                          Max.   :79045043  
+```
+                                                          
+Global_deaths
+
+```r
+ Province/State     Country/Region         date               deaths      
+ Length:218396      Length:218396      Length:218396      Min.   :     0  
+ Class :character   Class :character   Class :character   1st Qu.:     2  
+ Mode  :character   Mode  :character   Mode  :character   Median :    63  
+                                                          Mean   :  9051  
+                                                          3rd Qu.:  1521  
+                                                          Max.   :950490 
+```
+US_cases
+
+```r
+      date                cases        
+ Min.   :2020-01-22   Min.   :      0  
+ 1st Qu.:2020-08-01   1st Qu.:     83  
+ Median :2021-02-09   Median :   1065  
+ Mean   :2021-02-09   Mean   :   7473  
+ 3rd Qu.:2021-08-20   3rd Qu.:   4184  
+ Max.   :2022-02-28   Max.   :2796560  
+```
+
+US_deaths
+
+```r
+   Population            date                deaths     
+ Min.   :       0   Min.   :2020-01-22   Min.   :    0  
+ 1st Qu.:    9917   1st Qu.:2020-08-01   1st Qu.:    1  
+ Median :   24892   Median :2021-02-09   Median :   18  
+ Mean   :   99604   Mean   :2021-02-09   Mean   :  126  
+ 3rd Qu.:   64979   3rd Qu.:2021-08-20   3rd Qu.:   74  
+ Max.   :10039107   Max.   :2022-02-28   Max.   :30716  
+
+```
+***Tidying the Data***
+
+```markdown
+global_cases <- global_cases %>%
+     pivot_longer(cols = -c(`Province/State`,
+                            `Country/Region`, Lat, Long),
+                  names_to = "date",
+                  values_to = "cases") %>%
+     select(-c(Lat,Long))
+    
+
+global_deaths <- global_deaths %>%
+     pivot_longer(cols = -c(`Province/State`,
+                            `Country/Region`, Lat, Long),
+                  names_to = "date",
+                  values_to = "deaths") %>%
+     select(-c(Lat,Long))
+
+global <- global_cases %>%
+    full_join(global_deaths) %>%
+    rename(Country_Region = `Country/Region`,
+           Province_State = `Province/State`) %>%
+    mutate(date = mdy(date))
+
+global <- global%>% filter(cases >0)
+global %>% filter(cases > 28000000)
+
+
+
+US_cases <- US_cases %>%
+    pivot_longer(cols = -(UID:Combined_Key),
+                 names_to = "date",
+                 values_to = "cases") %>%
+     select(Admin2:cases) %>%
+     mutate(date = mdy(date)) %>%
+     select(-c(Lat,Long_))
+
+
+US_deaths <- US_deaths %>%
+    pivot_longer(cols = -(UID:Population),
+                 names_to = "date",
+                 values_to = "deaths") %>%
+     select(Admin2:deaths) %>%
+     mutate(date = mdy(date)) %>%
+     select(-c(Lat,Long_))
+
+US <- US_cases %>%
+    full_join(US_deaths)
+US_by_state <- US %>%
+    group_by(Province_State, Country_Region, date) %>%
+    summarize(cases = sum(cases), deaths = sum(deaths),
+              Population = sum(Population)) %>%
+    mutate(deaths_per_mill = deaths *1000000 / Population) %>%
+    select(Province_State, Country_Region, date,
+           cases, deaths, deaths_per_mill, Population) %>%
+    ungroup()
+
+US_totals <- US_by_state %>%
+    group_by(Country_Region, date) %>%
+    summarize(cases = sum(cases), deaths = sum(deaths),
+              Population = sum(Population)) %>%
+    mutate(deaths_per_mill = deaths *1000000 / Population) %>%
+    select(Country_Region, date,
+           cases, deaths, deaths_per_mill, Population) %>%
+    ungroup()
+
+```
+
+![Total COVID19 cases in US.](C:\Users\User\Desktop\COVID19-total_cases.png)
+
+```markdown
+
+US_totals %>%
+    filter(cases > 0) %>%
+    ggplot(aes(x = date, y = cases)) +
+    geom_line(aes(color = "cases")) +
+    geom_point(aes(color = "cases")) +
+    theme(legend.position="bottom",
+          axis.text.x = element_text(angle = 90)) +
+    labs(title = "Total COVID19 cases in US", y= NULL)
+```
+
+![Total COVID19 deaths in US.](C:\Users\User\Desktop\COVID19-total_deaths.png)
+
+```markdown
+
+US_totals %>%
+    filter(cases > 0) %>%
+    ggplot(aes(x = date, y = cases)) +
+    geom_line(aes(y = deaths, color = "deaths")) +
+    geom_point(aes(y = deaths, color = "deaths")) +
+    theme(legend.position="bottom",
+          axis.text.x = element_text(angle = 90)) +
+    labs(title = "Total COVID19 deaths in US", y= NULL)
+```
+
+```markdown
+US_by_state <- US_by_state %>%
+    mutate(new_cases = cases - lag(cases),
+           new_deaths = deaths -lag(deaths))
+US_totals <- US_totals %>%
+    mutate(new_cases = cases - lag(cases),
+           new_deaths = deaths - lag(deaths))
+           
+tail(US_totals %>% select(new_cases, new_deaths, everything())) 
+```
+
+![New COVID19 cases in US.](C:\Users\User\Desktop\New COVID19 cases in US.png)
+
+```markdown
+US_totals %>%
+    ggplot(aes(x = date, y = new_cases)) +
+    geom_line(aes(color = "new_cases")) +
+    geom_point(aes(color = "new_cases")) +
+    theme(legend.position="bottom",
+          axis.text.x = element_text(angle = 90)) +
+    labs(title = "New COVID19 cases in US", y= NULL)
+```
+
+![New COVID19 deaths in US.](C:\Users\User\Desktop\New COVID19 deaths in US.png)
+
+```markdown
+US_totals %>%
+    ggplot(aes(x = date, y = new_cases)) +
+    geom_line(aes(y = new_deaths, color = "new_deaths")) +
+    geom_point(aes(y = new_deaths, color = "new_deaths")) +
+    theme(legend.position="bottom",
+          axis.text.x = element_text(angle = 90)) +
+    labs(title = "New COVID19 deaths in US", y= NULL)
+```
+
+![Covid R0 in US.](C:\Users\User\Desktop\COVID19-R0.png)
+```markdown
+US_totals %>%
+    filter(cases > 0) %>%
+    ggplot(aes(x = date, y = cases)) +
+    geom_line(aes(color = "cases")) +
+    geom_point(aes(color = "cases")) +
+    #scale_y_log10() +
+    theme(legend.position="bottom",
+          axis.text.x = element_text(angle = 90)) +
+    labs(title = "r0 in US", y= NULL)
+```
+
+
+![COVID19 death rate in US.](C:\Users\User\Desktop\COVID19-death_rate.png)
+
+```markdown
+US_totals %>%
+    filter(cases > 0) %>%
+    ggplot(aes(x = date, y = cases)) +
+    geom_line(aes(color = "cases")) +
+    geom_point(aes(color = "cases")) +
+    geom_line(aes(y = deaths, color = "deaths")) +
+    geom_point(aes(y = deaths, color = "deaths")) +
+    #scale_y_log10() +
+    theme(legend.position="bottom",
+          axis.text.x = element_text(angle = 90)) +
+    labs(title = "death rate in US", y= NULL)
+```
+
+![COVID19 Times Series in US.](C:\Users\User\Desktop\predict.png)
+***Conclusion***
+
+As states throughout the U.S. lift stay-at-home orders, reopen businesses, and relax social distancing measures, the new cases in US reach new high in 2022 Jan .But the new deaths is still under control. It shows the controllability increasing or the damage of Covid19 is decreasing. If the mutation of covid do not increasing the death rate, we can believe that epidemic in US will relief and lockdown should be eased and lifted.
+
+
+***Technical Info***
+```markdown
+sessionInfo()
+```
+```r
+R version 4.1.2 (2021-11-01)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 19043)
+
+Matrix products: default
+
+locale:
+[1] LC_COLLATE=Chinese (Traditional)_Taiwan.950 
+[2] LC_CTYPE=Chinese (Traditional)_Taiwan.950   
+[3] LC_MONETARY=Chinese (Traditional)_Taiwan.950
+[4] LC_NUMERIC=C                                
+[5] LC_TIME=Chinese (Traditional)_Taiwan.950    
+system code page: 65001
+
+attached base packages:
+[1] tools     stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] ggplot2_3.3.5   tidyr_1.2.0     stringi_1.7.6   stringr_1.4.0   selectr_0.4-2  
+ [6] rematch2_2.1.2  rematch_1.0.1   reprex_2.0.1    readr_2.1.2     readxl_1.3.1   
+[11] modelr_0.1.8    lubridate_1.8.0 magrittr_2.0.2  lifecycle_1.0.1 lattice_0.20-45
+[16] labeling_0.4.2  knitr_1.37      dtplyr_1.2.1    dplyr_1.0.8     dbplyr_2.1.1   
+
+loaded via a namespace (and not attached):
+ [1] tidyselect_1.1.2  xfun_0.29         purrr_0.3.4       colorspace_2.0-3 
+ [5] vctrs_0.3.8       generics_0.1.2    htmltools_0.5.2   yaml_2.3.5       
+ [9] utf8_1.2.2        rlang_1.0.1       pillar_1.7.0      glue_1.6.2       
+[13] withr_2.4.3       DBI_1.1.2         bit64_4.0.5       munsell_0.5.0    
+[17] gtable_0.3.0      cellranger_1.1.0  evaluate_0.15     tzdb_0.2.0       
+[21] fastmap_1.1.0     curl_4.3.2        parallel_4.1.2    fansi_1.0.2      
+[25] broom_0.7.12      Rcpp_1.0.8        scales_1.1.1      backports_1.4.1  
+[29] vroom_1.5.7       farver_2.1.0      fs_1.5.2          bit_4.0.4        
+[33] hms_1.1.1         digest_0.6.29     grid_4.1.2        cli_3.2.0        
+[37] tibble_3.1.6      crayon_1.5.0      pkgconfig_2.0.3   ellipsis_0.3.2   
+[41] data.table_1.14.2 rstudioapi_0.13   assertthat_0.2.1  rmarkdown_2.11   
+[45] R6_2.5.1          compiler_4.1.2  
+```
